@@ -1,0 +1,11 @@
+experiment,agent,seed,survival_steps,coins,score,crashed,decisions,nodes_expanded_total,nodes_expanded_mean,nodes_expanded_max,decision_time_total_s,decision_time_mean_s,memory_or_policy_size,observation_k,initial_speed,speed_increment,speed_interval_rows,train_climbing_enabled,max_steps,mode,label,extra,variant
+e1,random,42,5,1,-98.96,True,5,0,0.0,0,1.0285000030307856e-05,2.057000006061571e-06,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,random,43,4,1,-98.97,True,4,0,0.0,0,2.870000002985762e-06,7.175000007464405e-07,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,baseline,42,15,6,6.149999999999998,False,15,0,0.0,0,1.838600002201929e-05,1.225733334801286e-06,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,baseline,43,15,6,6.149999999999998,False,15,0,0.0,0,1.1973999988867945e-05,7.982666659245296e-07,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,lookahead,42,15,6,6.149999999999998,False,15,327,21.8,30,0.08967333299997904,0.005978222199998603,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,lookahead,43,15,7,7.149999999999998,False,15,306,20.4,28,0.08094286600004352,0.005396191066669568,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,expectimax,42,15,6,6.149999999999998,False,15,1435,95.66666666666667,140,0.3135422589999166,0.020902817266661107,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,expectimax,43,15,7,7.149999999999998,False,15,1725,115.0,155,0.38041145599999027,0.025360763733332684,0.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,mdp,42,15,6,6.149999999999998,False,15,0,0.0,0,4.1733000017529776e-05,2.7822000011686516e-06,2592.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
+e1,mdp,43,15,6,6.149999999999998,False,15,0,0.0,0,4.3218999934424573e-05,2.8812666622949714e-06,2592.0,3,1.0,0.05,50,True,15,smoke,default,variant=agent_comparison,agent_comparison
