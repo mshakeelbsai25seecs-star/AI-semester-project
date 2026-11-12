@@ -1,7 +1,8 @@
 """Observation window and Agent protocol."""
 
+from agents import RandomAgent
 from game.actions import Action
-from game.agent import Agent, Observation, RandomAgent
+from game.agent import Agent, Observation
 from game.config import GameConfig
 from game.core import GameCore
 from tests.helpers import empty_row, make_core_with_track, pad_rows, row

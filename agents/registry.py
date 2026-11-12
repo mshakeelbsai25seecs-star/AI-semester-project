@@ -1,34 +1,68 @@
-"""Thin agent registry with graceful import fallbacks.
+"""Viewer / experiment agent selection API.
 
-Human and Random always work. Baseline / Lookahead / Expectimax / MDP are
-wired when their modules exist on disk; otherwise they appear unavailable.
+Canonical names (experiments + ``create_agent``): ``random``, ``baseline``,
+``lookahead``, ``expectimax``, ``mdp``. The viewer also accepts ``human`` and
+capitalized aliases (``Human``, ``Lookahead``, …).
 """
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple, Type
 
 from game.actions import Action
-from game.agent import Observation, RandomAgent
+from game.agent import Agent, Observation
+from game.config import GameConfig
 
-AgentFactory = Callable[[], object]
+from agents.baseline import BaselineAgent
+from agents.expectimax import ExpectimaxAgent
+from agents.lookahead import LookaheadAgent
+from agents.mdp import MdpAgent
+from agents.random_agent import RandomAgent
 
-AGENT_ORDER: Tuple[str, ...] = (
-    "Human",
-    "Random",
-    "Baseline",
-    "Lookahead",
-    "Expectimax",
-    "MDP",
+AGENT_NAMES = (
+    "random",
+    "baseline",
+    "lookahead",
+    "expectimax",
+    "mdp",
 )
+
+# Viewer menu order (human first, then the five AI players).
+AGENT_ORDER: Tuple[str, ...] = ("human",) + AGENT_NAMES
+
+_DISPLAY_NAMES: Dict[str, str] = {
+    "human": "Human",
+    "random": "Random",
+    "baseline": "Baseline",
+    "lookahead": "Lookahead",
+    "expectimax": "Expectimax",
+    "mdp": "MDP",
+}
+
+_ALIASES: Dict[str, str] = {
+    "human": "human",
+    "random": "random",
+    "baseline": "baseline",
+    "lookahead": "lookahead",
+    "expectimax": "expectimax",
+    "mdp": "mdp",
+    # Capitalized / UI labels
+    "Human": "human",
+    "Random": "random",
+    "Baseline": "baseline",
+    "Lookahead": "lookahead",
+    "Expectimax": "expectimax",
+    "MDP": "mdp",
+    "Mdp": "mdp",
+}
 
 
 class HumanAgent:
-    """Placeholder; the viewer supplies keyboard actions instead."""
+    """Placeholder; the viewer supplies keyboard actions instead of ``act``."""
 
-    name = "Human"
+    name = "human"
 
-    def reset(self) -> None:
+    def reset(self, *args: Any, **kwargs: Any) -> None:
         return None
 
     def act(self, observation: Observation) -> Action:
@@ -36,93 +70,82 @@ class HumanAgent:
         return Action.STAY
 
 
-def _try_import_factory(module_path: str, attr: str) -> Optional[AgentFactory]:
-    try:
-        module = __import__(module_path, fromlist=[attr])
-    except ImportError:
-        return None
-    cls = getattr(module, attr, None)
-    if cls is None:
-        return None
-
-    def factory() -> object:
-        try:
-            return cls()
-        except TypeError:
-            # Some agents may require seed/config; try common kwargs.
-            try:
-                return cls(seed=0)
-            except TypeError:
-                return cls(config=None)
-
-    return factory
+_REGISTRY: Dict[str, Type] = {
+    "human": HumanAgent,
+    "random": RandomAgent,
+    "baseline": BaselineAgent,
+    "lookahead": LookaheadAgent,
+    "expectimax": ExpectimaxAgent,
+    "mdp": MdpAgent,
+}
 
 
-def _build_registry() -> Dict[str, Optional[AgentFactory]]:
-    registry: Dict[str, Optional[AgentFactory]] = {
-        "Human": HumanAgent,
-        "Random": lambda: RandomAgent(seed=0),
-        "Baseline": None,
-        "Lookahead": None,
-        "Expectimax": None,
-        "MDP": None,
-    }
-
-    # Prefer package modules; also accept flat names if teammates land them early.
-    candidates = {
-        "Baseline": [
-            ("agents.baseline", "BaselineAgent"),
-            ("agents.baseline_agent", "BaselineAgent"),
-            ("game.agent", "BaselineAgent"),
-        ],
-        "Lookahead": [
-            ("agents.lookahead", "LookaheadAgent"),
-            ("agents.lookahead_agent", "LookaheadAgent"),
-        ],
-        "Expectimax": [
-            ("agents.expectimax", "ExpectimaxAgent"),
-            ("agents.expectimax_agent", "ExpectimaxAgent"),
-        ],
-        "MDP": [
-            ("agents.mdp", "MDPAgent"),
-            ("agents.mdp_agent", "MDPAgent"),
-        ],
-    }
-    for name, paths in candidates.items():
-        for module_path, attr in paths:
-            factory = _try_import_factory(module_path, attr)
-            if factory is not None:
-                registry[name] = factory
-                break
-    return registry
+def normalize_agent_name(name: str) -> str:
+    """Map UI / alias strings to canonical lowercase keys."""
+    key = _ALIASES.get(name)
+    if key is not None:
+        return key
+    lowered = name.strip().lower()
+    if lowered in _REGISTRY:
+        return lowered
+    raise KeyError(
+        f"Unknown agent {name!r}; choose from {list_available_agents()} "
+        f"(or AI-only {list_agents()})"
+    )
 
 
-_REGISTRY = _build_registry()
+def display_name(name: str) -> str:
+    """Pretty label for HUD / menus."""
+    key = normalize_agent_name(name)
+    return _DISPLAY_NAMES.get(key, key.title())
+
+
+def list_agents() -> List[str]:
+    """AI agent keys for experiments (excludes human)."""
+    return list(AGENT_NAMES)
 
 
 def list_available_agents() -> List[str]:
-    """Names that can be constructed right now (includes Human)."""
-    return [name for name in AGENT_ORDER if _REGISTRY.get(name) is not None]
+    """Viewer-facing keys that can be constructed (includes ``human``)."""
+    return [name for name in AGENT_ORDER if name in _REGISTRY]
 
 
 def list_all_agent_slots() -> List[Tuple[str, bool]]:
-    """All planned modes with availability flag."""
-    return [(name, _REGISTRY.get(name) is not None) for name in AGENT_ORDER]
+    """Planned viewer slots with availability flag."""
+    return [(name, name in _REGISTRY) for name in AGENT_ORDER]
 
 
-def create_agent(name: str):
-    """Construct an agent by UI name. Raises KeyError if unknown/unavailable."""
-    factory = _REGISTRY.get(name)
-    if factory is None:
-        available = ", ".join(list_available_agents())
-        raise KeyError(f"Agent {name!r} is not available yet. Available: {available}")
-    agent = factory()
-    if hasattr(agent, "reset"):
-        agent.reset()
-    return agent
+def create_agent(
+    name: str,
+    *,
+    config: GameConfig | None = None,
+    seed: int = 0,
+    **kwargs: Any,
+) -> Agent:
+    """Build an agent by registry name (for UI / experiments).
+
+    Examples::
+
+        agent = create_agent("lookahead", config=cfg)
+        agent = create_agent("mdp", config=cfg, horizon=2)
+        agent = create_agent("human")
+        agent = create_agent("Human")  # alias OK
+    """
+    key = normalize_agent_name(name)
+    cls = _REGISTRY[key]
+    cfg = config or GameConfig()
+
+    if key == "human":
+        return cls(**kwargs) if kwargs else cls()
+    if key == "random":
+        return cls(seed=seed, **kwargs)
+    if key == "baseline":
+        return cls(**kwargs)
+    if key == "mdp":
+        return cls(config=cfg, seed=seed, **kwargs)
+    return cls(config=cfg, **kwargs)
 
 
 def refresh_registry() -> None:
-    """Re-scan imports (useful after agents land without restarting Python)."""
-    global _REGISTRY
-    _REGISTRY = _build_registry()
+    """No-op kept for viewer compatibility (imports are eager now)."""
+    return None

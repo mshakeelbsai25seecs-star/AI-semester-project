@@ -24,8 +24,10 @@ from panda3d.core import (
 
 from agents.registry import (
     create_agent,
+    display_name,
     list_all_agent_slots,
     list_available_agents,
+    normalize_agent_name,
     refresh_registry,
 )
 from game.actions import Action
@@ -76,18 +78,20 @@ class ViewerApp(ShowBase):
         self.ui_initial_speed = (config or GameConfig()).initial_speed
         self.ui_speed_increment = (config or GameConfig()).speed_increment
         self.playback_rate = 1.0
-        self.agent_name = "Human"
+        self.agent_name = "human"
         self.paused = False
         self._pending_action: Action = Action.STAY
         self._step_timer = 0.0
         self._step_alpha = 1.0
-        self._agent = create_agent("Human")
         self._auto_quit_after = auto_quit_after
         self._elapsed = 0.0
         self._smoke_done = False
 
         self.core = GameCore(self._make_config())
         self.core.reset(seed=self.ui_seed)
+        self._agent = create_agent(
+            "human", config=self.core.config, seed=int(self.ui_seed)
+        )
 
         self.scene = GameScene(self.render, self.render, self.loader)
         self.hud = HUD()
@@ -117,8 +121,14 @@ class ViewerApp(ShowBase):
         self._step_timer = 0.0
         self._step_alpha = 1.0
         self.paused = False
+        self._agent = create_agent(
+            self.agent_name, config=self.core.config, seed=int(self.ui_seed)
+        )
         if hasattr(self._agent, "reset"):
-            self._agent.reset()
+            try:
+                self._agent.reset(seed=int(self.ui_seed))
+            except TypeError:
+                self._agent.reset()
 
     # ---------------------------------------------------------------- camera
 
@@ -143,7 +153,7 @@ class ViewerApp(ShowBase):
         self.accept("space", self._toggle_pause)
 
     def _queue_human(self, action: Action) -> None:
-        if self.agent_name != "Human":
+        if normalize_agent_name(self.agent_name) != "human":
             return
         if self.paused or self.core.is_terminal:
             return
@@ -177,17 +187,17 @@ class ViewerApp(ShowBase):
 
         refresh_registry()
         slots = list_all_agent_slots()
-        labels: List[str] = []
-        for name, ok in slots:
-            labels.append(name if ok else f"{name} (soon)")
-        # Only selectable items that are available
         available = list_available_agents()
+        menu_items = [display_name(name) for name in available]
+        self._menu_to_key = {
+            display_name(name): name for name in available
+        }
         self._agent_menu = DirectOptionMenu(
             parent=self.panel,
             text="Agent",
             scale=0.045,
-            items=available,
-            initialitem=available.index("Human") if "Human" in available else 0,
+            items=menu_items,
+            initialitem=menu_items.index("Human") if "Human" in menu_items else 0,
             highlightColor=(0.2, 0.45, 0.7, 1),
             command=self._on_agent_selected,
             pos=(-0.05, 0, y),
@@ -331,8 +341,8 @@ class ViewerApp(ShowBase):
         )
 
         # Availability footnote
-        missing = [n for n, ok in slots if not ok]
-        note = "Ready: " + ", ".join(available)
+        missing = [display_name(n) for n, ok in slots if not ok]
+        note = "Ready: " + ", ".join(display_name(n) for n in available)
         if missing:
             note += "  |  Later: " + ", ".join(missing)
         DirectLabel(
@@ -345,12 +355,19 @@ class ViewerApp(ShowBase):
             frameColor=(0, 0, 0, 0),
         )
 
-    def _on_agent_selected(self, name: str) -> None:
+    def _on_agent_selected(self, label: str) -> None:
         refresh_registry()
+        name = self._menu_to_key.get(label, label)
+        try:
+            name = normalize_agent_name(name)
+        except KeyError:
+            return
         if name not in list_available_agents():
             return
         self.agent_name = name
-        self._agent = create_agent(name)
+        self._agent = create_agent(
+            name, config=self.core.config, seed=int(self.ui_seed)
+        )
         self._pending_action = Action.STAY
 
     def _on_k_slider(self) -> None:
@@ -378,7 +395,7 @@ class ViewerApp(ShowBase):
         return 0.42 / (speed * max(0.25, self.playback_rate))
 
     def _choose_action(self) -> Action:
-        if self.agent_name == "Human":
+        if normalize_agent_name(self.agent_name) == "human":
             action = self._pending_action
             self._pending_action = Action.STAY
             return action
@@ -429,7 +446,7 @@ class ViewerApp(ShowBase):
             distance=st.distance,
             speed=st.speed,
             score=st.score,
-            agent_name=self.agent_name,
+            agent_name=display_name(self.agent_name),
             paused=self.paused,
             crashed=st.crashed,
             seed=self.ui_seed,

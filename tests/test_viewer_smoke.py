@@ -24,7 +24,7 @@ def test_viewer_offscreen_runs_briefly():
         assert app.core.state.distance >= 0
         assert app.scene.runner_np is not None
         # Human + Random registry path used by the viewer panel.
-        assert app.agent_name == "Human"
+        assert app.agent_name == "human"
     finally:
         try:
             app.taskMgr.remove("game_update")

@@ -2,16 +2,16 @@
 
 CS272 Artificial Intelligence (BSAI-2k25, Fall 2026) — Project P12.
 
-Endless 3-lane runner with a **headless pure-Python game core** for seeded AI experiments and a **Panda3D Layer 2 viewer** for human play and demos.
+Endless 3-lane runner with a **headless pure-Python game core**, **five AI agents**, and a **Panda3D Layer 2 viewer** for human play and demos.
 
 ## Status
 
 | Layer | Status |
 |-------|--------|
 | `game/` headless core | Done |
-| `viewer/` Panda3D UI | Done (this branch) |
-| `agents/` AI players | Human + Random now; Baseline / Lookahead / Expectimax / MDP plug in when modules land |
-| `experiments/` E1–E4 | Not in this PR |
+| `agents/` AI players | Random, baseline, lookahead (A*), Expectimax, MDP |
+| `viewer/` Panda3D UI | Done — reads core only; never owns rules |
+| `experiments/` E1–E4 | Not yet |
 
 ## Setup (Windows)
 
@@ -21,7 +21,7 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-Panda3D is pulled in via `requirements.txt` (`panda3d>=1.10.14`). A working GPU/display is needed for the on-screen window. On machines without a display, the core and most tests still run; the offscreen viewer smoke test skips if GL is unavailable.
+Panda3D comes from `requirements.txt` (`panda3d>=1.10.14`). A GPU/display is needed for the on-screen window; core + agent tests run without one.
 
 macOS / Linux:
 
@@ -57,7 +57,7 @@ run_game.bat
 
 ### Runtime UI (right panel)
 
-- **Agent** — Human, Random, and any AI agents discovered in `agents/`
+- **Agent** — Human, Random, Baseline, Lookahead, Expectimax, MDP
 - **K** — observation horizon (look-ahead rows)
 - **Seed** — track seed (±10 buttons)
 - **Playback rate** — demo step timing (visual)
@@ -73,9 +73,55 @@ HUD shows coins, distance, speed, score, seed, K, and the active agent name.
 python -m pytest -q
 ```
 
-Or `run_tests.bat`.
+Windows helpers: `run_tests.bat`
 
-## Game core API (agents / experiments)
+Light smoke (one short episode per AI agent):
+
+```bat
+python scripts\smoke_agents.py
+```
+
+## Agent selection API
+
+```python
+from agents import create_agent, list_agents, list_available_agents
+from game import GameConfig, GameCore
+
+print(list_agents())
+# ['random', 'baseline', 'lookahead', 'expectimax', 'mdp']
+
+print(list_available_agents())
+# ['human', 'random', 'baseline', 'lookahead', 'expectimax', 'mdp']
+
+cfg = GameConfig()
+agent = create_agent("lookahead", config=cfg)   # also: baseline / expectimax / mdp / random / human
+core = GameCore(cfg)
+obs = core.reset(seed=42)
+while not core.is_terminal:
+    action = agent.act(obs)
+    obs, reward, done, info = core.step(action)
+```
+
+| Name | Class | Notes |
+|------|--------|--------|
+| `human` | `HumanAgent` | Viewer keyboard; `act` returns STAY |
+| `random` | `RandomAgent` | Seeded uniform actions |
+| `baseline` | `BaselineAgent` | Proposal §4 one-row reactive rules |
+| `lookahead` | `LookaheadAgent` | A* over visible K; `nodes_expanded`, `last_plan` |
+| `expectimax` | `ExpectimaxAgent` | Chance nodes beyond K; `nodes_expanded` |
+| `mdp` | `MdpAgent` | Offline VI on reduced state; `policy` / `stats` |
+
+Capitalized aliases (`Human`, `Lookahead`, `MDP`, …) are accepted by `create_agent`.
+
+### MDP reduced state (for report / UI)
+
+1. `lane`
+2. `body_status` (ground / jumping / rolling / on_train)
+3. Cell-type pattern of the nearest `horizon_rows` (default 1)
+
+Jump/roll timers are folded into `body_status` (exact when duration = 1).
+
+## Game core API
 
 ```python
 from game import Action, GameConfig, GameCore
@@ -85,9 +131,10 @@ obs = core.reset(seed=42)              # same seed → same track
 while not core.is_terminal:
     action = Action.STAY               # or agent.act(obs)
     obs, reward, done, info = core.step(action)
+    # obs.rows = next K cells
 ```
 
-Agents implement `game.agent.Agent` (`act(observation) -> Action`). Register new agents under `agents/` using names expected by `agents.registry` (`BaselineAgent`, `LookaheadAgent`, `ExpectimaxAgent`, `MDPAgent`).
+Search agents plan via `GameCore.clone()` / `GameCore.from_observation(...)` so rules stay in `game/` only.
 
 ### Defaults (`GameConfig`)
 
@@ -105,10 +152,11 @@ Agents implement `game.agent.Agent` (`act(observation) -> Action`). Register new
 ## Layout
 
 ```
-game/           headless core (no Panda3D)
-viewer/         Panda3D Layer 2 (reads core only)
-agents/         agent registry + future AI modules
-tests/
+game/              headless core (no Panda3D)
+agents/            AI players + create_agent registry (+ human for viewer)
+viewer/            Panda3D Layer 2 (reads core only)
+tests/             unit tests (core + agents + viewer smoke)
+scripts/           smoke_agents.py
 requirements.txt
 run_game.bat
 run_tests.bat
