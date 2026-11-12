@@ -62,23 +62,6 @@ class Agent(Protocol):
         ...
 
 
-class RandomAgent:
-    """Uniform random action agent (comparison floor). Stub for later PR."""
-
-    def __init__(self, seed: int = 0) -> None:
-        import random
-
-        self._rng = random.Random(seed)
-        self._actions = list(Action)
-
-    def reset(self) -> None:
-        return None
-
-    def act(self, observation: Observation) -> Action:
-        del observation
-        return self._rng.choice(self._actions)
-
-
 def observation_from_parts(
     *,
     lane: int,
