@@ -12,6 +12,7 @@ from game.actions import BodyStatus
 from game.cells import Cell, CellType
 from game.core import GameCore
 from viewer import constants as C
+from viewer.fx import CollectedCoins, hop_height
 from viewer.geometry import make_box, make_wedge, smoothstep
 
 
@@ -32,7 +33,9 @@ class GameScene:
         self.city_root = self.world.attachNewNode("city")
         self.runner_np = self.world.attachNewNode("runner")
         self._cell_nodes: Dict[Tuple[int, int], NodePath] = {}
+        self._coin_nodes: Dict[Tuple[int, int], NodePath] = {}
         self._coin_spin: List[NodePath] = []
+        self.collected_coins = CollectedCoins()
         self._scroll_y = 0.0
         self._target_lane_x = 0.0
         self._runner_z = 0.0
@@ -40,6 +43,9 @@ class GameScene:
         self._built_static = False
         self._last_distance = -1
         self._bob_t = 0.0
+        # Timed hop so duration-1 jumps are still visible in the UI.
+        self._hop_elapsed = 0.0
+        self._hop_duration = 0.0
 
         self._setup_lights()
         self._build_runner()
@@ -163,10 +169,34 @@ class GameScene:
         for np in list(self._cell_nodes.values()):
             np.removeNode()
         self._cell_nodes.clear()
+        self._coin_nodes.clear()
         self._coin_spin.clear()
+        self.collected_coins.reset()
         self._scroll_y = 0.0
         self._last_distance = -1
+        self._hop_elapsed = 0.0
+        self._hop_duration = 0.0
+        self._runner_z = 0.0
         self.track_root.setPos(0, 0, 0)
+
+    def mark_coin_collected(self, row: int, lane: int) -> None:
+        """Hide the coin mesh immediately and skip it on later rebuilds."""
+        key = (int(row), int(lane))
+        self.collected_coins.mark(*key)
+        coin = self._coin_nodes.pop(key, None)
+        if coin is not None and not coin.isEmpty():
+            coin.removeNode()
+        # Keep spin list clean (empty NodePaths are skipped while spinning).
+        self._coin_spin = [c for c in self._coin_spin if not c.isEmpty()]
+
+    def trigger_hop(self, duration_sec: float = 0.38) -> None:
+        """Start a visible hop (covers duration-1 jumps that end inside one step)."""
+        self._hop_elapsed = 0.0
+        self._hop_duration = max(0.05, float(duration_sec))
+
+    @property
+    def hop_active(self) -> bool:
+        return self._hop_duration > 0.0 and self._hop_elapsed < self._hop_duration
 
     def sync_from_core(self, core: GameCore, dt: float, step_alpha: float) -> None:
         """Update visuals from authoritative core state."""
@@ -193,23 +223,39 @@ class GameScene:
         if st.body_status is BodyStatus.ON_TRAIN:
             base_z = C.TRAIN_TOP_Z
         elif st.body_status is BodyStatus.JUMPING:
-            # Arc while jump_timer counts down
+            # Arc while jump_timer counts down (multi-step jumps).
             total = max(1, cfg.jump_duration)
             t = 1.0 - (st.jump_timer / total)
-            base_z = 1.35 * math.sin(math.pi * min(1.0, t + (1.0 - step_alpha) / total))
+            base_z = hop_height(
+                min(1.0, t + (1.0 - step_alpha) / total),
+                peak=1.35,
+            )
         elif st.body_status is BodyStatus.ROLLING:
             scale_z = 0.45
             pitch = 70.0
             base_z = -0.15
 
-        self._runner_z += (base_z - self._runner_z) * min(1.0, dt * 12.0)
+        # Timed hop overlay — jump_duration defaults to 1, so core is already
+        # back on GROUND by the next frame; keep a short visible arc anyway.
+        if self.hop_active:
+            self._hop_elapsed += dt
+            progress = min(1.0, self._hop_elapsed / self._hop_duration)
+            base_z = max(base_z, hop_height(progress, peak=1.45))
+            if progress >= 1.0:
+                self._hop_duration = 0.0
+
+        # Snappy vertical follow so hops read clearly (choppiness OK).
+        blend = min(1.0, dt * 18.0)
+        self._runner_z += (base_z - self._runner_z) * blend
         self.runner_np.setZ(self._runner_z)
         self.runner_np.setScale(1.0, 1.0, scale_z)
         self.runner_np.setP(pitch)
 
         self._bob_t += dt * (6.0 + st.speed * 2.0)
-        if st.body_status is BodyStatus.GROUND:
+        if st.body_status is BodyStatus.GROUND and not self.hop_active:
             self.runner_np.setY(math.sin(self._bob_t) * 0.04)
+        else:
+            self.runner_np.setY(0.0)
 
         # Spin coins
         for coin in self._coin_spin:
@@ -225,6 +271,7 @@ class GameScene:
         for np in list(self._cell_nodes.values()):
             np.removeNode()
         self._cell_nodes.clear()
+        self._coin_nodes.clear()
         self._coin_spin.clear()
 
         start = max(0, st.distance - C.VISIBLE_BEHIND)
@@ -277,14 +324,18 @@ class GameScene:
         key = (row_i, lane)
         holder = self.track_root.attachNewNode(f"cell_{row_i}_{lane}")
         self._cell_nodes[key] = holder
+        show_coin = self.collected_coins.should_draw_coin(row_i, lane, cell)
 
         if cell.type is CellType.EMPTY:
             return
 
-        if cell.type is CellType.COIN or (cell.has_coin and not cell.is_train):
-            self._add_coin(holder, x, y, 0.7)
-            if cell.type is CellType.COIN:
-                return
+        if cell.type is CellType.COIN:
+            if show_coin:
+                self._add_coin(holder, row_i, lane, x, y, 0.7)
+            return
+
+        if cell.has_coin and not cell.is_train and show_coin:
+            self._add_coin(holder, row_i, lane, x, y, 0.7)
 
         if cell.type is CellType.LOW_BARRIER:
             make_box(
@@ -338,8 +389,8 @@ class GameScene:
                 pos=(x, y + C.ROW_LENGTH * 0.25, C.TRAIN_HEIGHT * 0.5),
                 name="ramp_car",
             )
-            if cell.has_coin:
-                self._add_coin(holder, x, y, C.TRAIN_TOP_Z + 0.55)
+            if show_coin:
+                self._add_coin(holder, row_i, lane, x, y, C.TRAIN_TOP_Z + 0.55)
             return
 
         if cell.type is CellType.TRAIN:
@@ -366,10 +417,18 @@ class GameScene:
                 name="windows",
                 transparent=True,
             )
-            if cell.has_coin:
-                self._add_coin(holder, x, y, C.TRAIN_TOP_Z + 0.55)
+            if show_coin:
+                self._add_coin(holder, row_i, lane, x, y, C.TRAIN_TOP_Z + 0.55)
 
-    def _add_coin(self, parent: NodePath, x: float, y: float, z: float) -> None:
+    def _add_coin(
+        self,
+        parent: NodePath,
+        row_i: int,
+        lane: int,
+        x: float,
+        y: float,
+        z: float,
+    ) -> None:
         coin = make_box(
             parent,
             (0.55, 0.12, 0.55),
@@ -377,4 +436,5 @@ class GameScene:
             pos=(x, y, z),
             name="coin",
         )
+        self._coin_nodes[(row_i, lane)] = coin
         self._coin_spin.append(coin)
