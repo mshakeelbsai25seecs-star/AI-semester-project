@@ -2,7 +2,9 @@
 
 CS272 Artificial Intelligence (BSAI-2k25, Fall 2026) — Project P12.
 
-Endless 3-lane runner with a **headless pure-Python game core**, **five AI agents**, and a **Panda3D Layer 2 viewer** for human play and demos.
+Endless 3-lane runner with a **headless pure-Python game core**, **five AI agents**, and a **Panda3D Layer 2 viewer** for human play and Windows demos.
+
+> **Demo OS:** Windows. Short viva walkthrough: see [`DEMO.md`](DEMO.md).
 
 ## Status
 
@@ -13,7 +15,9 @@ Endless 3-lane runner with a **headless pure-Python game core**, **five AI agent
 | `viewer/` Panda3D UI | Done — reads core only; never owns rules |
 | `experiments/` E1–E4 | Done — smoke + full presets, plots under `experiments/results/` |
 
-## Setup (Windows)
+## Windows setup (recommended)
+
+From the repo root in **Command Prompt** or **PowerShell**:
 
 ```bat
 python -m venv .venv
@@ -21,29 +25,40 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-Panda3D comes from `requirements.txt` (`panda3d>=1.10.14`). A GPU/display is needed for the on-screen window; core + agent tests run without one.
+Requirements: **Python 3.10+**, a working display/GPU for the 3D window. Core + agent tests run without a GPU.
 
-macOS / Linux:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-## Play the game
-
-```bat
-python -m viewer
-```
-
-Or:
+Then either:
 
 ```bat
 run_game.bat
 ```
 
-### Controls
+or (with venv active):
+
+```bat
+python -m viewer
+```
+
+`run_game.bat` prefers `.venv\Scripts\python.exe` when present, then `python` / `py -3` on PATH. It checks that Panda3D imports before opening the window.
+
+### Optional launch flags
+
+```bat
+python -m viewer --agent lookahead --seed 42
+python -m viewer --agent mdp
+python -m viewer --offscreen --seconds 2
+```
+
+### macOS / Linux (dev)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m viewer
+```
+
+## Controls
 
 | Input | Action |
 |-------|--------|
@@ -51,21 +66,20 @@ run_game.bat
 | D / Right | Lane right |
 | W / Up | Jump |
 | S / Down | Roll |
-| P / Space | Pause |
-| R | Restart (applies UI tunables) |
+| P / Space | Pause (or **restart after a crash**) |
+| R | Restart (applies current panel settings) |
 | Esc | Quit |
 
-### Runtime UI (right panel)
+### Right-hand panel
 
-- **Agent** — Human, Random, Baseline, Lookahead, Expectimax, MDP
-- **K** — observation horizon (look-ahead rows)
-- **Seed** — track seed (±10 buttons)
-- **Playback rate** — demo step timing (visual)
-- **Start speed** — `GameConfig.initial_speed`
-- **Train climbing** — on/off
-- **Apply & Restart** — rebuild config and reset episode
+1. **Agent** — Human (You), Random, Baseline, Lookahead (A*), Expectimax, MDP  
+   Changing agent **restarts** the episode so comparisons stay clean.
+2. **K / Seed** — observation horizon and track seed (±10)
+3. **Playback rate / Start speed / Train climbing** — demo feel + config
+4. **Apply settings & Restart** — rebuild `GameConfig` and reset  
+   **Restart (R)** after a crash for a fast loop
 
-HUD shows coins, distance, speed, score, seed, K, and the active agent name.
+HUD: coins, distance, speed, score, seed, K, active agent. Crash banner prompts R / Space / Restart.
 
 ## Run experiments (E1–E4)
 
@@ -107,19 +121,35 @@ python -m experiments --smoke --results-dir experiments/results
 python -m pytest -q tests/test_experiments_plumbing.py
 ```
 
-## Run tests
+## Tests & smoke
+
+```bat
+run_tests.bat
+```
+
+or:
 
 ```bat
 python -m pytest -q
 ```
 
-Windows helpers: `run_tests.bat`
-
-Light smoke (one short episode per AI agent):
+Headless agent smoke (one short episode each):
 
 ```bat
-python scripts\smoke_agents.py
+scripts\smoke_agents.bat
 ```
+
+or `python scripts\smoke_agents.py`
+
+## Troubleshooting (Panda3D / GPU)
+
+| Symptom | What to try |
+|---------|-------------|
+| `run_game.bat` says Panda3D missing | Activate `.venv`, then `python -m pip install -r requirements.txt` |
+| Window never opens / black screen | Update GPU drivers; try another monitor; close apps that lock the GPU |
+| Import works but crash on start | Reinstall: `python -m pip install --force-reinstall "panda3d>=1.10.14"` |
+| Need proof without a display | `python -m pytest -q` and `scripts\smoke_agents.bat` (core + agents are headless) |
+| Wrong Python picked | Use `.venv\Scripts\activate` or delete other `python` entries ahead on PATH |
 
 ## Agent selection API
 
@@ -197,7 +227,8 @@ agents/            AI players + create_agent registry (+ human for viewer)
 viewer/            Panda3D Layer 2 (reads core only)
 experiments/       E1–E4 runners, metrics, plots → results/
 tests/             unit tests (core + agents + viewer + experiments plumbing)
-scripts/           smoke_agents.py
+scripts/           smoke_agents.py / .bat
+DEMO.md            2–3 min viva / demo script
 requirements.txt
 run_game.bat
 run_tests.bat

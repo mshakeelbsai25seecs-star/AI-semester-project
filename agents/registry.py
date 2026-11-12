@@ -31,10 +31,10 @@ AGENT_NAMES = (
 AGENT_ORDER: Tuple[str, ...] = ("human",) + AGENT_NAMES
 
 _DISPLAY_NAMES: Dict[str, str] = {
-    "human": "Human",
+    "human": "Human (You)",
     "random": "Random",
     "baseline": "Baseline",
-    "lookahead": "Lookahead",
+    "lookahead": "Lookahead (A*)",
     "expectimax": "Expectimax",
     "mdp": "MDP",
 }
@@ -46,11 +46,13 @@ _ALIASES: Dict[str, str] = {
     "lookahead": "lookahead",
     "expectimax": "expectimax",
     "mdp": "mdp",
-    # Capitalized / UI labels
+    # Capitalized / UI labels (short + menu strings)
     "Human": "human",
+    "Human (You)": "human",
     "Random": "random",
     "Baseline": "baseline",
     "Lookahead": "lookahead",
+    "Lookahead (A*)": "lookahead",
     "Expectimax": "expectimax",
     "MDP": "mdp",
     "Mdp": "mdp",
