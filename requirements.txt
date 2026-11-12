@@ -1,5 +1,6 @@
 # Subway Surfers Lite — Python dependencies
-# Core is pure Python (3.10+). pytest is for the test suite.
-# Panda3D will be added when the viewer lands.
+# Core is pure Python (3.10+). Panda3D is required for the 3D viewer.
+# Install on Windows with:  python -m pip install -r requirements.txt
 
 pytest>=7.4
+panda3d>=1.10.14
