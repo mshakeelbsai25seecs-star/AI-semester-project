@@ -485,7 +485,8 @@ class ViewerApp(ShowBase):
             if self._step_timer >= interval:
                 self._step_timer -= interval
                 action = self._choose_action()
-                self.core.step(action)
+                _obs, _reward, _done, info = self.core.step(action)
+                self._apply_step_visuals(action, info)
                 self._step_alpha = 0.0
         else:
             self._step_alpha = 1.0
@@ -509,8 +510,20 @@ class ViewerApp(ShowBase):
             crashed=st.crashed,
             seed=self.ui_seed,
             k=int(self.ui_k),
+            body_status=st.body_status.value,
+            hopping=self.scene.hop_active,
         )
         return task.cont
+
+    def _apply_step_visuals(self, action: Action, info: dict) -> None:
+        """Viewer-only reactions to a core step (coins despawn, hop cue)."""
+        if info.get("coin_collected"):
+            row = info.get("row")
+            if row is not None:
+                self.scene.mark_coin_collected(int(row), int(self.core.state.lane))
+        if info.get("started") == "jump":
+            # Duration-1 jumps finish inside step(); keep a short visible hop.
+            self.scene.trigger_hop()
 
 
 def run_viewer(

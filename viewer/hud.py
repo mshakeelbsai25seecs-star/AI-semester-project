@@ -75,10 +75,15 @@ class HUD:
         crashed: bool,
         seed: int,
         k: int,
+        body_status: str = "ground",
+        hopping: bool = False,
     ) -> None:
+        posture = body_status.upper()
+        if hopping and body_status == "ground":
+            posture = "JUMPING"
         self.stats.setText(
             f"Coins {coins}   Dist {distance}   Speed {speed:.2f}   Score {score:.1f}   "
-            f"Seed {seed}   K {k}"
+            f"Seed {seed}   K {k}   {posture}"
         )
         self.agent.setText(f"Agent: {agent_name}")
         if crashed:
