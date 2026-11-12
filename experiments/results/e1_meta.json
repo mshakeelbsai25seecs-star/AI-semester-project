@@ -1,0 +1,67 @@
+{
+  "agent_kwargs": {
+    "expectimax": {
+      "chance_outcomes": 2,
+      "extra_depth": 0
+    },
+    "mdp": {
+      "chance_outcomes": 2,
+      "horizon_rows": 1,
+      "max_iterations": 5,
+      "theta": 0.01
+    }
+  },
+  "agents": [
+    "random",
+    "baseline",
+    "lookahead",
+    "expectimax",
+    "mdp"
+  ],
+  "argv": [
+    "/agent/repos/AI-semester-project/experiments/__main__.py",
+    "--smoke",
+    "--results-dir",
+    "experiments/results"
+  ],
+  "climb_values": [
+    true,
+    false
+  ],
+  "experiments": [
+    "e1",
+    "e2",
+    "e3",
+    "e4"
+  ],
+  "k_values": [
+    2,
+    3
+  ],
+  "machine": "cursor",
+  "matplotlib": "3.11.2",
+  "max_steps": 15,
+  "mode": "smoke",
+  "observation_k": 3,
+  "platform": "Linux-6.12.113+-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "seeds": [
+    42,
+    43
+  ],
+  "speed_schedules": [
+    {
+      "initial_speed": 1.0,
+      "label": "default",
+      "speed_increment": 0.05,
+      "speed_interval_rows": 50
+    },
+    {
+      "initial_speed": 1.5,
+      "label": "fast",
+      "speed_increment": 0.1,
+      "speed_interval_rows": 30
+    }
+  ],
+  "timestamp_utc": "2026-11-12T09:15:08.520962+00:00"
+}

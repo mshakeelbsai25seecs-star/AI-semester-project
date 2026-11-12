@@ -13,7 +13,7 @@ Endless 3-lane runner with a **headless pure-Python game core**, **five AI agent
 | `game/` headless core | Done |
 | `agents/` AI players | Random, baseline, lookahead (A*), Expectimax, MDP |
 | `viewer/` Panda3D UI | Done — reads core only; never owns rules |
-| `experiments/` E1–E4 | Separate track (do not block the demo) |
+| `experiments/` E1–E4 | Done — smoke + full presets, plots under `experiments/results/` |
 
 ## Windows setup (recommended)
 
@@ -80,6 +80,46 @@ python -m viewer
    **Restart (R)** after a crash for a fast loop
 
 HUD: coins, distance, speed, score, seed, K, active agent. Crash banner prompts R / Space / Restart.
+
+## Run experiments (E1–E4)
+
+Proposal evaluation suite: agent comparison (E1), effect of K (E2), speed schedule (E3), train climbing on/off (E4).
+
+Metrics per seeded episode: survival steps, coins, nodes expanded, decision time, MDP policy size (where relevant). Seeds and config are logged to `*_meta.json`; summaries include mean and sample variance/std.
+
+```bat
+REM Short CI / smoke mode (few seeds, short episodes, light agent kwargs)
+python -m experiments --smoke
+
+REM Full report presets (10 seeds, longer caps) — can be slow for Expectimax/MDP
+python -m experiments --mode full
+
+REM One experiment only
+python -m experiments --smoke --experiment e1
+```
+
+Windows helper:
+
+```bat
+run_experiments.bat smoke
+run_experiments.bat
+```
+
+Outputs land in `experiments/results/`:
+
+| File | Contents |
+|------|----------|
+| `e1_episodes.csv` … `e4_episodes.csv` | Per-seed raw metrics |
+| `e1_summary.csv` … `e4_summary.csv` | Mean / variance / std by group |
+| `e*_*.png` | Matplotlib plots |
+| `run_meta.json` / `e*_meta.json` | Seeds, config, Python/platform versions |
+
+Reproduce the checked-in smoke sample:
+
+```bat
+python -m experiments --smoke --results-dir experiments/results
+python -m pytest -q tests/test_experiments_plumbing.py
+```
 
 ## Tests & smoke
 
@@ -185,13 +225,14 @@ Search agents plan via `GameCore.clone()` / `GameCore.from_observation(...)` so 
 game/              headless core (no Panda3D)
 agents/            AI players + create_agent registry (+ human for viewer)
 viewer/            Panda3D Layer 2 (reads core only)
-tests/             unit tests (core + agents + viewer smoke)
+experiments/       E1–E4 runners, metrics, plots → results/
+tests/             unit tests (core + agents + viewer + experiments plumbing)
 scripts/           smoke_agents.py / .bat
-experiments/       evaluation harness (separate workstream)
 DEMO.md            2–3 min viva / demo script
 requirements.txt
 run_game.bat
 run_tests.bat
+run_experiments.bat
 ```
 
 ## Architecture note
