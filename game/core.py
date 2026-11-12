@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+import copy
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from game.actions import Action, BodyStatus
 from game.agent import Observation, observation_from_parts
@@ -150,6 +151,75 @@ class GameCore:
         obs = self.reset(seed=seed)
         self.generator.load_scripted_rows(rows, seed=seed)
         return self.observe()
+
+    def clone(self) -> "GameCore":
+        """Deep copy for search / planning without touching the live episode."""
+        if not self._initialized:
+            raise RuntimeError("Call reset() before clone()")
+        twin = GameCore(self.config)
+        twin.generator = copy.deepcopy(self.generator)
+        twin.state = copy.deepcopy(self.state)
+        twin._initialized = True
+        return twin
+
+    def apply_observation_state(self, obs: Observation) -> None:
+        """Copy runner fields from an observation onto this core (track unchanged)."""
+        if not self._initialized:
+            raise RuntimeError("Call reset() before apply_observation_state()")
+        self.state.lane = obs.lane
+        self.state.body_status = obs.body_status
+        self.state.jump_timer = obs.jump_timer
+        self.state.roll_timer = obs.roll_timer
+        self.state.speed = obs.speed
+        self.state.distance = obs.distance
+        self.state.coins = obs.coins
+        self.state.score = obs.score
+        self.state.steps = obs.steps
+        self.state.terminal = obs.terminal
+        self.state.crashed = obs.crashed
+
+    @classmethod
+    def from_observation(
+        cls,
+        obs: Observation,
+        config: Optional[GameConfig] = None,
+        *,
+        future_rows: Sequence[Tuple[Cell, ...]] = (),
+        seed: int = 0,
+    ) -> "GameCore":
+        """Fork a simulator whose row 0 is ``obs.rows[0]``.
+
+        Visible rows (plus optional ``future_rows`` for Expectimax) are loaded as
+        a scripted prefix. Runner posture matches ``obs``, but ``distance`` is
+        reset to 0 so planning indexes the scripted window from the start.
+        Coins/score/steps start at 0 for relative planning rewards.
+        """
+        cfg = config or GameConfig(
+            num_lanes=obs.num_lanes,
+            observation_k=max(obs.k, 1),
+            train_climbing_enabled=obs.train_climbing_enabled,
+        )
+        # Preserve timing / reward knobs when a full config is provided.
+        core = cls(cfg)
+        rows: List[Tuple[Cell, ...]] = list(obs.rows) + list(future_rows)
+        if not rows:
+            rows = [
+                tuple(Cell(CellType.EMPTY) for _ in range(cfg.num_lanes))
+            ]
+        core.load_scripted_track(rows, seed=seed)
+        core.state.lane = obs.lane
+        core.state.body_status = obs.body_status
+        core.state.jump_timer = obs.jump_timer
+        core.state.roll_timer = obs.roll_timer
+        core.state.speed = obs.speed
+        core.state.distance = 0
+        core.state.coins = 0
+        core.state.score = 0.0
+        core.state.steps = 0
+        core.state.terminal = obs.terminal
+        core.state.crashed = obs.crashed
+        core.state.seed = seed
+        return core
 
     # ------------------------------------------------------------- mechanics
 

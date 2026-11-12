@@ -2,11 +2,13 @@
 
 CS272 Artificial Intelligence (BSAI-2k25, Fall 2026) — Project P12.
 
-Endless 3-lane runner with a **headless pure-Python game core** for seeded AI experiments, plus (upcoming) a Panda3D viewer and search / Expectimax / MDP agents.
+Endless 3-lane runner with a **headless pure-Python game core** and **five AI agents**. Panda3D viewer and experiment harness come next.
 
 ## Status
 
-This repository currently ships the **headless game core** (`game/`) and unit tests (`tests/`). Agents, Panda3D UI, and experiments land in follow-up work.
+- `game/` — headless core (seeded track, rules, scoring, K-row observations)
+- `agents/` — random, baseline, lookahead (A*), Expectimax, MDP (value iteration)
+- Panda3D UI / full experiments — not in this branch yet
 
 ## Setup (Windows / any platform)
 
@@ -26,32 +28,64 @@ python -m pip install -r requirements.txt
 
 ## Run tests
 
-From the repo root:
-
 ```bat
 python -m pytest -q
 ```
 
-Or on Windows double-click / run:
+Windows helper: `run_tests.bat`
+
+Light smoke (one short episode per agent):
 
 ```bat
-run_tests.bat
+python scripts\smoke_agents.py
 ```
 
-## Game core API (for agents / viewer)
+## Agent selection API (for the viewer)
+
+```python
+from agents import create_agent, list_agents
+from game import GameConfig, GameCore
+
+print(list_agents())
+# ['random', 'baseline', 'lookahead', 'expectimax', 'mdp']
+
+cfg = GameConfig()
+agent = create_agent("lookahead", config=cfg)   # or baseline / expectimax / mdp / random
+core = GameCore(cfg)
+obs = core.reset(seed=42)
+while not core.is_terminal:
+    action = agent.act(obs)
+    obs, reward, done, info = core.step(action)
+```
+
+| Name | Class | Notes |
+|------|--------|--------|
+| `random` | `RandomAgent` | Seeded uniform actions |
+| `baseline` | `BaselineAgent` | Proposal §4 one-row reactive rules |
+| `lookahead` | `LookaheadAgent` | A* over visible K; `nodes_expanded`, `last_plan` |
+| `expectimax` | `ExpectimaxAgent` | Chance nodes beyond K; `nodes_expanded` |
+| `mdp` | `MdpAgent` | Offline VI on reduced state; `policy` / `stats` |
+
+### MDP reduced state (for report / UI)
+
+1. `lane`
+2. `body_status` (ground / jumping / rolling / on_train)
+3. Cell-type pattern of the nearest `horizon_rows` (default 1)
+
+Jump/roll timers are folded into `body_status` (exact when duration = 1).
+
+## Game core API
 
 ```python
 from game import Action, GameConfig, GameCore
 
-core = GameCore(GameConfig())          # defaults: K=8, seed=42, climb on
-obs = core.reset(seed=42)              # same seed → same track
-while not core.is_terminal:
-    action = Action.STAY               # or agent.act(obs)
-    obs, reward, done, info = core.step(action)
-    # obs.rows = next K cells; each cell is EMPTY/COIN/LOW/HIGH/TRAIN/TRAIN_RAMP
+core = GameCore(GameConfig())
+obs = core.reset(seed=42)
+obs, reward, done, info = core.step(Action.JUMP)
+# obs.rows = next K cells
 ```
 
-Agents implement `game.agent.Agent` (`act(observation) -> Action`). See `game/agent.py`.
+Search agents plan via `GameCore.clone()` / `GameCore.from_observation(...)` so rules stay in `game/` only.
 
 ### Defaults (`GameConfig`)
 
@@ -69,8 +103,10 @@ Agents implement `game.agent.Agent` (`act(observation) -> Action`). See `game/ag
 ## Layout
 
 ```
-game/           headless core (no Panda3D)
-tests/          unit tests
+game/              headless core (no Panda3D)
+agents/            AI players + create_agent registry
+tests/             unit tests (core + agents)
+scripts/           smoke_agents.py
 requirements.txt
 run_tests.bat
 ```
