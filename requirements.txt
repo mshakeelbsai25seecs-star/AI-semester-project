@@ -1,0 +1,5 @@
+# Subway Surfers Lite — Python dependencies
+# Core is pure Python (3.10+). pytest is for the test suite.
+# Panda3D will be added when the viewer lands.
+
+pytest>=7.4
